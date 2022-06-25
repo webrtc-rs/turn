@@ -104,7 +104,7 @@ async fn main() -> Result<(), Error> {
     // address assigned on the TURN server.
     println!(
         "relayed-address={}",
-        relay_conn.local_addr().await?.to_string()
+        relay_conn.local_addr().await?
     );
 
     // If you provided `-ping`, perform a ping test agaist the
