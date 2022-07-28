@@ -288,7 +288,7 @@ impl Request {
             if let Some(mi) = self.authenticate_request(m, METHOD_ALLOCATE).await? {
                 mi
             } else {
-                log::debug!("no MessageIntegrity 1");
+                log::debug!("no MessageIntegrity");
                 return Ok(());
             };
 
@@ -560,7 +560,7 @@ impl Request {
             if let Some(mi) = self.authenticate_request(m, METHOD_REFRESH).await? {
                 mi
             } else {
-                log::debug!("no MessageIntegrity 2");
+                log::debug!("no MessageIntegrity");
                 return Ok(());
             };
 
@@ -614,7 +614,7 @@ impl Request {
             {
                 mi
             } else {
-                log::debug!("no MessageIntegrity 3");
+                log::debug!("no MessageIntegrity");
                 return Ok(());
             };
             let mut add_count = 0;
@@ -730,7 +730,7 @@ impl Request {
                 if let Some(mi) = self.authenticate_request(m, METHOD_CHANNEL_BIND).await? {
                     mi
                 } else {
-                    log::debug!("no MessageIntegrity 4");
+                    log::debug!("no MessageIntegrity");
                     return Ok(());
                 };
             let mut channel = ChannelNumber::default();
