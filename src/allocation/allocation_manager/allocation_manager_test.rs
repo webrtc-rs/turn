@@ -62,6 +62,7 @@ async fn test_packet_handler() -> Result<()> {
             Arc::new(turn_socket),
             0,
             DEFAULT_LIFETIME,
+            String::from("user"),
         )
         .await?;
 
@@ -168,11 +169,18 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
+            String::from("user"),
         )
         .await?;
 
     let result = m
-        .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, DEFAULT_LIFETIME)
+        .create_allocation(
+            five_tuple,
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            String::from("user"),
+        )
         .await;
     assert!(result.is_err(), "expected error, but got ok");
 
@@ -196,6 +204,7 @@ async fn test_delete_allocation() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
+            String::from("user"),
         )
         .await?;
 
@@ -231,7 +240,13 @@ async fn test_allocation_timeout() -> Result<()> {
         let five_tuple = random_five_tuple();
 
         let a = m
-            .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, lifetime)
+            .create_allocation(
+                five_tuple,
+                Arc::clone(&turn_socket),
+                0,
+                lifetime,
+                String::from("user"),
+            )
             .await?;
 
         allocations.push(a);
@@ -280,6 +295,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(100),
+            String::from("user"),
         )
         .await?;
     allocations.push(a1);
@@ -290,6 +306,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(200),
+            String::from("user"),
         )
         .await?;
     allocations.push(a2);

@@ -93,6 +93,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             Arc::clone(&r.conn),
             0,
             Duration::from_secs(3600),
+            String::from("user"),
         )
         .await?;
     assert!(r

@@ -12,12 +12,19 @@ use config::*;
 use request::*;
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use tokio::sync::{watch, Mutex};
 use tokio::time::{Duration, Instant};
 use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
+
+// #[derive(Send, Sync)]
+enum Command {
+    DeleteAllocation(String),
+}
 
 /// Server is an instance of the TURN Server
 pub struct Server {
@@ -26,6 +33,7 @@ pub struct Server {
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
     shutdown_tx: Mutex<Option<watch::Sender<bool>>>,
+    commanders: HashMap<SocketAddr, Mutex<Sender<Command>>>,
 }
 
 impl Server {
@@ -41,6 +49,7 @@ impl Server {
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
             shutdown_tx: Mutex::new(Some(shutdown_tx)),
+            commanders: HashMap::new(),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -53,22 +62,31 @@ impl Server {
             let realm = s.realm.clone();
             let channel_bind_timeout = s.channel_bind_timeout;
             let shutdown_rx = shutdown_rx.clone();
+            let conn = p.conn;
+            let allocation_manager = Arc::new(Manager::new(ManagerConfig {
+                relay_addr_generator: p.relay_addr_generator,
+            }));
 
-            tokio::spawn(async move {
-                let allocation_manager = Arc::new(Manager::new(ManagerConfig {
-                    relay_addr_generator: p.relay_addr_generator,
-                }));
+            let (commander_tx, commander_rx) = mpsc::channel::<Command>();
+            s.commanders
+                .insert(conn.local_addr().await.unwrap(), Mutex::new(commander_tx));
 
-                Server::read_loop(
-                    p.conn,
-                    allocation_manager,
-                    nonces,
-                    auth_handler,
-                    realm,
-                    channel_bind_timeout,
-                    shutdown_rx,
-                )
-                .await;
+            tokio::spawn({
+                let allocation_manager = Arc::clone(&allocation_manager);
+
+                async move {
+                    Server::read_loop(
+                        conn,
+                        allocation_manager,
+                        nonces,
+                        auth_handler,
+                        realm,
+                        channel_bind_timeout,
+                        shutdown_rx,
+                        commander_rx,
+                    )
+                    .await;
+                }
             });
         }
 
@@ -83,6 +101,7 @@ impl Server {
         realm: String,
         channel_bind_timeout: Duration,
         mut shutdown_rx: watch::Receiver<bool>,
+        commander_rx: Receiver<Command>,
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
 
@@ -108,6 +127,19 @@ impl Server {
                 }
             };
 
+            'commander: loop {
+                let command = commander_rx.try_recv();
+
+                match command {
+                    Ok(command) => match command {
+                        Command::DeleteAllocation(name) => {
+                            allocation_manager.delete_allocation_by_username(name).await;
+                        }
+                    },
+                    Err(_) => break 'commander,
+                }
+            }
+
             let mut r = Request {
                 conn: Arc::clone(&conn),
                 src_addr: addr,
@@ -126,6 +158,11 @@ impl Server {
 
         let _ = allocation_manager.close().await;
         let _ = conn.close().await;
+    }
+
+    pub async fn delete_allocation(&self, addr: SocketAddr, username: String) {
+        let commander = self.commanders.get(&addr).unwrap().lock().await;
+        commander.send(Command::DeleteAllocation(username)).unwrap();
     }
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing

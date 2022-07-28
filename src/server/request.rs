@@ -467,6 +467,8 @@ impl Request {
         //    client to a different server.  The use of this error code and
         //    attribute follow the specification in [RFC5389].
         let lifetime_duration = allocation_lifetime(m);
+        let mut username = Username::new(ATTR_USERNAME, String::new());
+        username.get_from(m)?;
         let a = match self
             .allocation_manager
             .create_allocation(
@@ -474,6 +476,7 @@ impl Request {
                 Arc::clone(&self.conn),
                 requested_port,
                 lifetime_duration,
+                username.text,
             )
             .await
         {

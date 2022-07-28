@@ -18,6 +18,7 @@ pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
+    name_associated_fivetuples: Arc<Mutex<HashMap<String, FiveTuple>>>,
 }
 
 impl Manager {
@@ -27,6 +28,7 @@ impl Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
             relay_addr_generator: config.relay_addr_generator,
+            name_associated_fivetuples: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -53,6 +55,7 @@ impl Manager {
         turn_socket: Arc<dyn Conn + Send + Sync>,
         requested_port: u16,
         lifetime: Duration,
+        name: String,
     ) -> Result<Arc<Mutex<Allocation>>> {
         if lifetime == Duration::from_secs(0) {
             return Err(Error::ErrLifetimeZero);
@@ -76,6 +79,10 @@ impl Manager {
         let a = Arc::new(Mutex::new(a));
         {
             let mut allocations = self.allocations.lock().await;
+            self.name_associated_fivetuples
+                .lock()
+                .await
+                .insert(name, five_tuple.clone());
             allocations.insert(five_tuple.fingerprint(), Arc::clone(&a));
         }
 
@@ -94,6 +101,13 @@ impl Manager {
                 log::error!("Failed to close allocation: {}", err);
             }
         }
+    }
+
+    pub async fn delete_allocation_by_username(&self, name: String) {
+        let mut guarded = self.name_associated_fivetuples.lock().await;
+
+        self.delete_allocation(&guarded.remove(&name).unwrap())
+            .await;
     }
 
     // create_reservation stores the reservation for the token+port
