@@ -127,6 +127,8 @@ impl Server {
                 }
             };
 
+            log::error!("address: {addr}");
+
             'commander: loop {
                 let command = commander_rx.try_recv();
 
