@@ -198,6 +198,8 @@ impl Request {
             return Ok(None);
         }
 
+        log::error!("before handle");
+
         let our_key = match self.auth_handler.auth_handle(
             &username_attr.to_string(),
             &realm_attr.to_string(),
@@ -205,6 +207,7 @@ impl Request {
         ) {
             Ok(key) => key,
             Err(_) => {
+                log::error!("error");
                 build_and_send_err(
                     &self.conn,
                     self.src_addr,
@@ -215,6 +218,8 @@ impl Request {
                 return Ok(None);
             }
         };
+
+        log::error!("after handle");
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
