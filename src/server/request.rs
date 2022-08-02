@@ -124,11 +124,26 @@ impl Request {
             }
         } else if m.typ.class == CLASS_REQUEST {
             match m.typ.method {
-                METHOD_ALLOCATE => self.handle_allocate_request(m).await,
-                METHOD_REFRESH => self.handle_refresh_request(m).await,
-                METHOD_CREATE_PERMISSION => self.handle_create_permission_request(m).await,
-                METHOD_CHANNEL_BIND => self.handle_channel_bind_request(m).await,
-                METHOD_BINDING => self.handle_binding_request(m).await,
+                METHOD_ALLOCATE => {
+                    log::error!("allocate");
+                    self.handle_allocate_request(m).await
+                }
+                METHOD_REFRESH => {
+                    log::error!("refresh");
+                    self.handle_refresh_request(m).await
+                }
+                METHOD_CREATE_PERMISSION => {
+                    log::error!("create permission");
+                    self.handle_create_permission_request(m).await
+                }
+                METHOD_CHANNEL_BIND => {
+                    log::error!("channel bind");
+                    self.handle_channel_bind_request(m).await
+                }
+                METHOD_BINDING => {
+                    log::error!("binding");
+                    self.handle_binding_request(m).await
+                }
                 _ => Err(Error::ErrUnexpectedClass),
             }
         } else {
