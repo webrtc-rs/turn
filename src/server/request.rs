@@ -157,6 +157,8 @@ impl Request {
         calling_method: Method,
     ) -> Result<Option<MessageIntegrity>> {
         log::error!("authentication start");
+        log::error!("message: {:#?}", m);
+
         if !m.contains(ATTR_MESSAGE_INTEGRITY) {
             self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
                 .await?;
