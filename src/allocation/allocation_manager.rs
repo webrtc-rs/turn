@@ -32,6 +32,13 @@ impl Manager {
         }
     }
 
+    pub async fn print(&self) {
+        log::error!(
+            "allocation quantity: {}",
+            self.allocations.lock().await.len()
+        );
+    }
+
     // Close closes the manager and closes all allocations it manages
     pub async fn close(&self) -> Result<()> {
         let allocations = self.allocations.lock().await;
