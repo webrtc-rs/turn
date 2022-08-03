@@ -296,6 +296,8 @@ impl Request {
     pub(crate) async fn handle_binding_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received BindingRequest from {}", self.src_addr);
 
+        log::error!("message: {:#?}", m);
+
         let (ip, port) = (self.src_addr.ip(), self.src_addr.port());
 
         let msg = build_msg(
