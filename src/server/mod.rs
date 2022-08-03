@@ -154,8 +154,6 @@ impl Server {
                 channel_bind_timeout,
             };
 
-            allocation_manager.print().await;
-
             if let Err(err) = r.handle_request().await {
                 log::error!("error when handling datagram: {}", err);
             }
