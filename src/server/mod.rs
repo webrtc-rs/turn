@@ -57,7 +57,6 @@ impl Server {
         }
 
         for p in config.conn_configs.into_iter() {
-            log::error!("config: {:?}", p.conn.local_addr().await.unwrap());
             let nonces = Arc::clone(&s.nonces);
             let auth_handler = Arc::clone(&s.auth_handler);
             let realm = s.realm.clone();
@@ -127,8 +126,6 @@ impl Server {
                     }
                 }
             };
-
-            log::error!("address: {addr}");
 
             'commander: loop {
                 let command = commander_rx.try_recv();

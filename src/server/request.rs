@@ -124,26 +124,11 @@ impl Request {
             }
         } else if m.typ.class == CLASS_REQUEST {
             match m.typ.method {
-                METHOD_ALLOCATE => {
-                    log::error!("allocate");
-                    self.handle_allocate_request(m).await
-                }
-                METHOD_REFRESH => {
-                    log::error!("refresh");
-                    self.handle_refresh_request(m).await
-                }
-                METHOD_CREATE_PERMISSION => {
-                    log::error!("create permission");
-                    self.handle_create_permission_request(m).await
-                }
-                METHOD_CHANNEL_BIND => {
-                    log::error!("channel bind");
-                    self.handle_channel_bind_request(m).await
-                }
-                METHOD_BINDING => {
-                    log::error!("binding");
-                    self.handle_binding_request(m).await
-                }
+                METHOD_ALLOCATE => self.handle_allocate_request(m).await,
+                METHOD_REFRESH => self.handle_refresh_request(m).await,
+                METHOD_CREATE_PERMISSION => self.handle_create_permission_request(m).await,
+                METHOD_CHANNEL_BIND => self.handle_channel_bind_request(m).await,
+                METHOD_BINDING => self.handle_binding_request(m).await,
                 _ => Err(Error::ErrUnexpectedClass),
             }
         } else {
@@ -156,15 +141,11 @@ impl Request {
         m: &Message,
         calling_method: Method,
     ) -> Result<Option<MessageIntegrity>> {
-        log::error!("authentication start");
-        log::error!("message: {:#?}", m);
-
         if !m.contains(ATTR_MESSAGE_INTEGRITY) {
             self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
                 .await?;
             return Ok(None);
         }
-        log::error!("authentication contains");
 
         let mut nonce_attr = Nonce::new(ATTR_NONCE, String::new());
         let mut username_attr = Username::new(ATTR_USERNAME, String::new());
@@ -178,14 +159,10 @@ impl Request {
             })],
         )?;
 
-        log::error!("authentication get nonce");
-
         if let Err(err) = nonce_attr.get_from(m) {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
-
-        log::error!("authentication to be deleted");
 
         let to_be_deleted = {
             // Assert Nonce exists and is not expired
@@ -206,29 +183,21 @@ impl Request {
             to_be_deleted
         };
 
-        log::error!("authentication to be deleted: {}", to_be_deleted);
-
         if to_be_deleted {
             self.respond_with_nonce(m, calling_method, CODE_STALE_NONCE)
                 .await?;
             return Ok(None);
         }
 
-        log::error!("authentication realm");
-
         if let Err(err) = realm_attr.get_from(m) {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
 
-        log::error!("authentication username");
-
         if let Err(err) = username_attr.get_from(m) {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
-
-        log::error!("before handle");
 
         let our_key = match self.auth_handler.auth_handle(
             &username_attr.to_string(),
@@ -237,7 +206,6 @@ impl Request {
         ) {
             Ok(key) => key,
             Err(_) => {
-                log::error!("error");
                 build_and_send_err(
                     &self.conn,
                     self.src_addr,
@@ -248,8 +216,6 @@ impl Request {
                 return Ok(None);
             }
         };
-
-        log::error!("after handle");
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
@@ -295,8 +261,6 @@ impl Request {
 
     pub(crate) async fn handle_binding_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received BindingRequest from {}", self.src_addr);
-
-        log::error!("message: {:#?}", m);
 
         let (ip, port) = (self.src_addr.ip(), self.src_addr.port());
 
