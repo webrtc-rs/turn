@@ -21,7 +21,6 @@ use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
-// #[derive(Send, Sync)]
 enum Command {
     DeleteAllocation(String),
 }
