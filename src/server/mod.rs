@@ -21,7 +21,11 @@ use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
+/// The protocol to communicate between the [`Server`]'s public methods
+/// and the threads spawned in the [`read_loop`] method.
 enum Command {
+    /// Command to delete [`crate::allocation::Allocation`] by provided
+    /// `username`.
     DeleteAllocation(String),
 }
 
@@ -159,6 +163,8 @@ impl Server {
         let _ = conn.close().await;
     }
 
+    /// Deletes the [`crate::allocation::Allocation`] by provided [`Conn`]
+    /// address and `username`.
     pub async fn delete_allocation(&self, addr: SocketAddr, username: String) {
         let commander = self.commanders.get(&addr).unwrap().lock().await;
         commander.send(Command::DeleteAllocation(username)).unwrap();
