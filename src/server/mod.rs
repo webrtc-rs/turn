@@ -31,6 +31,7 @@ enum Command {
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
+    /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),
 }
 

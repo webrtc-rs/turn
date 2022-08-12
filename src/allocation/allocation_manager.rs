@@ -103,6 +103,7 @@ impl Manager {
         }
     }
 
+    /// Deletes the [`Allocation`] according to the specified `username`.
     pub async fn delete_allocations_by_username(&self, name: String) {
         let mut allocations = self.allocations.lock().await;
 
