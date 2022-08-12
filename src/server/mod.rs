@@ -4,29 +4,34 @@ mod server_test;
 pub mod config;
 pub mod request;
 
-use crate::allocation::allocation_manager::*;
-use crate::auth::AuthHandler;
-use crate::error::*;
-use crate::proto::lifetime::DEFAULT_LIFETIME;
+use crate::{
+    allocation::allocation_manager::*, auth::AuthHandler, error::*,
+    proto::lifetime::DEFAULT_LIFETIME,
+};
 use config::*;
 use request::*;
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
-use tokio::sync::{watch, Mutex};
-use tokio::time::{Duration, Instant};
+use std::{collections::HashMap, sync::Arc};
+use tokio::{
+    sync::{
+        broadcast::{self, error::RecvError},
+        mpsc, Mutex,
+    },
+    time::{Duration, Instant},
+};
 use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
 /// The protocol to communicate between the [`Server`]'s public methods
 /// and the threads spawned in the [`read_loop`] method.
+#[derive(Clone)]
 enum Command {
     /// Command to delete [`crate::allocation::Allocation`] by provided
     /// `username`.
-    DeleteAllocation(String),
+    DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+
+    Close(Arc<mpsc::Receiver<()>>),
 }
 
 /// Server is an instance of the TURN Server
@@ -35,8 +40,7 @@ pub struct Server {
     realm: String,
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
-    shutdown_tx: Mutex<Option<watch::Sender<bool>>>,
-    commanders: HashMap<SocketAddr, Mutex<Sender<Command>>>,
+    handle: Mutex<Option<broadcast::Sender<Command>>>,
 }
 
 impl Server {
@@ -44,15 +48,13 @@ impl Server {
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
-        let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
+        let (handle, _) = broadcast::channel(16);
         let mut s = Server {
             auth_handler: config.auth_handler,
             realm: config.realm,
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
-            shutdown_tx: Mutex::new(Some(shutdown_tx)),
-            commanders: HashMap::new(),
+            handle: Mutex::new(Some(handle.clone())),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -64,15 +66,11 @@ impl Server {
             let auth_handler = Arc::clone(&s.auth_handler);
             let realm = s.realm.clone();
             let channel_bind_timeout = s.channel_bind_timeout;
-            let shutdown_rx = shutdown_rx.clone();
+            let handle_rx = handle.subscribe();
             let conn = p.conn;
             let allocation_manager = Arc::new(Manager::new(ManagerConfig {
                 relay_addr_generator: p.relay_addr_generator,
             }));
-
-            let (commander_tx, commander_rx) = mpsc::channel::<Command>();
-            s.commanders
-                .insert(conn.local_addr().await.unwrap(), Mutex::new(commander_tx));
 
             tokio::spawn({
                 let allocation_manager = Arc::clone(&allocation_manager);
@@ -85,8 +83,7 @@ impl Server {
                         auth_handler,
                         realm,
                         channel_bind_timeout,
-                        shutdown_rx,
-                        commander_rx,
+                        handle_rx,
                     )
                     .await;
                 }
@@ -103,45 +100,36 @@ impl Server {
         auth_handler: Arc<dyn AuthHandler + Send + Sync>,
         realm: String,
         channel_bind_timeout: Duration,
-        mut shutdown_rx: watch::Receiver<bool>,
-        commander_rx: Receiver<Command>,
+        mut handle_rx: broadcast::Receiver<Command>,
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
-
         loop {
             let (n, addr) = tokio::select! {
                 v = conn.recv_from(&mut buf) => {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
-                            log::debug!("exit read loop on error: {}", err);
+                            log::debug!("exit read loop on error: {err}");
                             break;
                         }
                     }
                 },
-                did_change = shutdown_rx.changed() => {
-                    if did_change.is_err() || *shutdown_rx.borrow() {
-                        // if did_change.is_err, sender was dropped, or if
-                        // bool is set to true, that means we're shutting down.
-                        break
-                    } else {
-                        continue;
+                cmd = handle_rx.recv() => {
+                    match cmd {
+                        Ok(Command::DeleteAllocations(name, _)) => {
+                            allocation_manager
+                                .delete_allocations_by_username(name)
+                                .await;
+                            continue;
+                        }
+                        Err(RecvError::Closed) | Ok(Command::Close(_)) => break,
+                        Err(RecvError::Lagged(n)) => {
+                            log::error!("Turn server at has lagged by {n} messages");
+                            continue
+                        },
                     }
                 }
             };
-
-            'commander: loop {
-                let command = commander_rx.try_recv();
-
-                match command {
-                    Ok(command) => match command {
-                        Command::DeleteAllocation(name) => {
-                            allocation_manager.delete_allocation_by_username(name).await;
-                        }
-                    },
-                    Err(_) => break 'commander,
-                }
-            }
 
             let mut r = Request {
                 conn: Arc::clone(&conn),
@@ -165,19 +153,38 @@ impl Server {
 
     /// Deletes the [`crate::allocation::Allocation`] by provided [`Conn`]
     /// address and `username`.
-    pub async fn delete_allocation(&self, addr: SocketAddr, username: String) {
-        let commander = self.commanders.get(&addr).unwrap().lock().await;
-        commander.send(Command::DeleteAllocation(username)).unwrap();
+    pub async fn delete_allocation(&self, username: String) -> Result<()> {
+        let tx = self.handle.lock().await.clone();
+        if let Some(tx) = tx {
+            let (closed_tx, closed_rx) = mpsc::channel(1);
+            let res = tx
+                .send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
+                .map(|_| ())
+                .map_err(|_| Error::ErrClosed);
+
+            if res.is_err() {
+                return res;
+            }
+
+            closed_tx.closed().await;
+
+            Ok(())
+        } else {
+            Err(Error::ErrClosed)
+        }
     }
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
-        let mut shutdown_tx = self.shutdown_tx.lock().await;
-        if let Some(tx) = shutdown_tx.take() {
-            // errors if there are no receivers, but that's irrelevant.
-            let _ = tx.send(true);
-            // wait for all receivers to drop/close.
-            tx.closed().await;
+        let tx = self.handle.lock().await.take();
+        if let Some(tx) = tx {
+            if tx.receiver_count() == 0 {
+                return Ok(());
+            }
+
+            let (closed_tx, closed_rx) = mpsc::channel(1);
+            let _ = tx.send(Command::Close(Arc::new(closed_rx)));
+            closed_tx.closed().await
         }
 
         Ok(())

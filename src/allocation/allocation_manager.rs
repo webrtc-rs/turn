@@ -5,7 +5,9 @@ use super::*;
 use crate::error::*;
 use crate::relay::*;
 
+use futures::future;
 use std::collections::HashMap;
+use stun::textattrs::Username;
 use util::Conn;
 
 // ManagerConfig a bag of config params for Manager.
@@ -18,7 +20,6 @@ pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
-    name_associated_fivetuples: Arc<Mutex<HashMap<String, FiveTuple>>>,
 }
 
 impl Manager {
@@ -28,7 +29,6 @@ impl Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
             relay_addr_generator: config.relay_addr_generator,
-            name_associated_fivetuples: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -36,16 +36,15 @@ impl Manager {
     pub async fn close(&self) -> Result<()> {
         let allocations = self.allocations.lock().await;
         for a in allocations.values() {
-            let mut a = a.lock().await;
             a.close().await?;
         }
         Ok(())
     }
 
     // get_allocation fetches the allocation matching the passed FiveTuple
-    pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Mutex<Allocation>>> {
+    pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Allocation>> {
         let allocations = self.allocations.lock().await;
-        allocations.get(&five_tuple.fingerprint()).map(Arc::clone)
+        allocations.get(five_tuple).map(Arc::clone)
     }
 
     // create_allocation creates a new allocation and starts relaying
@@ -55,8 +54,8 @@ impl Manager {
         turn_socket: Arc<dyn Conn + Send + Sync>,
         requested_port: u16,
         lifetime: Duration,
-        name: String,
-    ) -> Result<Arc<Mutex<Allocation>>> {
+        username: Username,
+    ) -> Result<Arc<Allocation>> {
         if lifetime == Duration::from_secs(0) {
             return Err(Error::ErrLifetimeZero);
         }
@@ -69,21 +68,23 @@ impl Manager {
             .relay_addr_generator
             .allocate_conn(true, requested_port)
             .await?;
-        let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple.clone());
+        let mut a = Allocation::new(
+            turn_socket,
+            relay_socket,
+            relay_addr,
+            five_tuple.clone(),
+            username,
+        );
         a.allocations = Some(Arc::clone(&self.allocations));
 
         log::debug!("listening on relay addr: {:?}", a.relay_addr);
         a.start(lifetime).await;
         a.packet_handler().await;
 
-        let a = Arc::new(Mutex::new(a));
+        let a = Arc::new(a);
         {
             let mut allocations = self.allocations.lock().await;
-            self.name_associated_fivetuples
-                .lock()
-                .await
-                .insert(name, five_tuple.clone());
-            allocations.insert(five_tuple.fingerprint(), Arc::clone(&a));
+            allocations.insert(five_tuple, Arc::clone(&a));
         }
 
         Ok(a)
@@ -91,23 +92,42 @@ impl Manager {
 
     // delete_allocation removes an allocation
     pub async fn delete_allocation(&self, five_tuple: &FiveTuple) {
-        let fingerprint = five_tuple.fingerprint();
-
-        let mut allocations = self.allocations.lock().await;
-        let allocation = allocations.remove(&fingerprint);
+        let allocation = {
+            let mut allocations = self.allocations.lock().await;
+            allocations.remove(five_tuple)
+        };
         if let Some(a) = allocation {
-            let mut a = a.lock().await;
             if let Err(err) = a.close().await {
                 log::error!("Failed to close allocation: {}", err);
             }
         }
     }
 
-    pub async fn delete_allocation_by_username(&self, name: String) {
-        let mut guarded = self.name_associated_fivetuples.lock().await;
+    pub async fn delete_allocations_by_username(&self, name: String) {
+        let mut allocations = self.allocations.lock().await;
 
-        self.delete_allocation(&guarded.remove(&name).unwrap())
-            .await;
+        let mut tuples = Vec::new();
+        allocations.values().for_each(|v| {
+            if v.username.text == name {
+                tuples.push(v.five_tuple.clone());
+            }
+        });
+
+        let mut to_delete = Vec::with_capacity(tuples.len());
+        {
+            for t in tuples {
+                to_delete.push(allocations.remove(&t));
+            }
+        }
+
+        future::join_all(to_delete.iter().map(|a| async move {
+            if let Some(a) = a {
+                if let Err(err) = a.close().await {
+                    log::error!("Failed to close allocation: {}", err);
+                }
+            }
+        }))
+        .await;
     }
 
     // create_reservation stores the reservation for the token+port

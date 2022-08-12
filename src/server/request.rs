@@ -140,7 +140,7 @@ impl Request {
         &mut self,
         m: &Message,
         calling_method: Method,
-    ) -> Result<Option<MessageIntegrity>> {
+    ) -> Result<Option<(Username, MessageIntegrity)>> {
         if !m.contains(ATTR_MESSAGE_INTEGRITY) {
             self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
                 .await?;
@@ -193,7 +193,6 @@ impl Request {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
-
         if let Err(err) = username_attr.get_from(m) {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
@@ -222,7 +221,7 @@ impl Request {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             Ok(None)
         } else {
-            Ok(Some(mi))
+            Ok(Some((username_attr, mi)))
         }
     }
 
@@ -285,7 +284,7 @@ impl Request {
         //    mechanism of [https://tools.ietf.org/html/rfc5389#section-10.2.2]
         //    unless the client and server agree to use another mechanism through
         //    some procedure outside the scope of this document.
-        let message_integrity =
+        let (username, message_integrity) =
             if let Some(mi) = self.authenticate_request(m, METHOD_ALLOCATE).await? {
                 mi
             } else {
@@ -468,8 +467,6 @@ impl Request {
         //    client to a different server.  The use of this error code and
         //    attribute follow the specification in [RFC5389].
         let lifetime_duration = allocation_lifetime(m);
-        let mut username = Username::new(ATTR_USERNAME, String::new());
-        username.get_from(m)?;
         let a = match self
             .allocation_manager
             .create_allocation(
@@ -477,7 +474,7 @@ impl Request {
                 Arc::clone(&self.conn),
                 requested_port,
                 lifetime_duration,
-                username.text,
+                username,
             )
             .await
         {
@@ -513,10 +510,7 @@ impl Request {
         //     and port (from the 5-tuple).
 
         let (src_ip, src_port) = (self.src_addr.ip(), self.src_addr.port());
-        let (relay_ip, relay_port) = {
-            let a = a.lock().await;
-            (a.relay_addr.ip(), a.relay_addr.port())
-        };
+        let (relay_ip, relay_port) = { (a.relay_addr.ip(), a.relay_addr.port()) };
 
         let msg = {
             if !reservation_token.is_empty() {
@@ -557,7 +551,7 @@ impl Request {
     pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received RefreshRequest from {}", self.src_addr);
 
-        let message_integrity =
+        let (_, message_integrity) =
             if let Some(mi) = self.authenticate_request(m, METHOD_REFRESH).await? {
                 mi
             } else {
@@ -575,7 +569,6 @@ impl Request {
         if lifetime_duration != Duration::from_secs(0) {
             let a = self.allocation_manager.get_allocation(&five_tuple).await;
             if let Some(a) = a {
-                let a = a.lock().await;
                 a.refresh(lifetime_duration).await;
             } else {
                 return Err(Error::ErrNoAllocationFound);
@@ -609,7 +602,7 @@ impl Request {
             .await;
 
         if let Some(a) = a {
-            let message_integrity = if let Some(mi) = self
+            let (_, message_integrity) = if let Some(mi) = self
                 .authenticate_request(m, METHOD_CREATE_PERMISSION)
                 .await?
             {
@@ -621,7 +614,6 @@ impl Request {
             let mut add_count = 0;
 
             {
-                let a = a.lock().await;
                 for attr in &m.attributes.0 {
                     if attr.typ != ATTR_XOR_PEER_ADDRESS {
                         continue;
@@ -685,15 +677,11 @@ impl Request {
 
             let msg_dst = SocketAddr::new(peer_address.ip, peer_address.port);
 
-            let has_perm = {
-                let a = a.lock().await;
-                a.has_permission(&msg_dst).await
-            };
+            let has_perm = { a.has_permission(&msg_dst).await };
             if !has_perm {
                 return Err(Error::ErrNoPermission);
             }
 
-            let a = a.lock().await;
             let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
             if l != data_attr.0.len() {
                 Err(Error::ErrShortWrite)
@@ -727,7 +715,7 @@ impl Request {
                 })],
             )?;
 
-            let message_integrity =
+            let (_, message_integrity) =
                 if let Some(mi) = self.authenticate_request(m, METHOD_CHANNEL_BIND).await? {
                     mi
                 } else {
@@ -753,7 +741,6 @@ impl Request {
             );
 
             let result = {
-                let a = a.lock().await;
                 a.add_channel_bind(
                     ChannelBind::new(channel, SocketAddr::new(peer_addr.ip, peer_addr.port)),
                     self.channel_bind_timeout,
@@ -788,7 +775,6 @@ impl Request {
             .await;
 
         if let Some(a) = a {
-            let a = a.lock().await;
             let channel = a.get_channel_addr(&c.number).await;
             if let Some(peer) = channel {
                 let l = a.relay_socket.send_to(&c.data, peer).await?;
