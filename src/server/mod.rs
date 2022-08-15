@@ -9,6 +9,7 @@ use crate::{
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
+use futures::FutureExt;
 use request::*;
 
 use std::{collections::HashMap, sync::Arc};
@@ -105,8 +106,8 @@ impl Server {
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
         loop {
-            let (n, addr) = tokio::select! {
-                v = conn.recv_from(&mut buf) => {
+            let (n, addr) = futures::select! {
+                v = conn.recv_from(&mut buf).fuse() => {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
@@ -115,7 +116,7 @@ impl Server {
                         }
                     }
                 },
-                cmd = handle_rx.recv() => {
+                cmd = handle_rx.recv().fuse() => {
                     match cmd {
                         Ok(Command::DeleteAllocations(name, _)) => {
                             allocation_manager
