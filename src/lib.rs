@@ -10,4 +10,4 @@ pub mod proto;
 pub mod relay;
 pub mod server;
 
-pub use error::{Error, Result};
+pub use error::Error;
