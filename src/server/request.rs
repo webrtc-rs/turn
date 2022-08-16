@@ -510,7 +510,8 @@ impl Request {
         //     and port (from the 5-tuple).
 
         let (src_ip, src_port) = (self.src_addr.ip(), self.src_addr.port());
-        let (relay_ip, relay_port) = { (a.relay_addr.ip(), a.relay_addr.port()) };
+        let relay_ip = a.relay_addr.ip();
+        let relay_port = a.relay_addr.port();
 
         let msg = {
             if !reservation_token.is_empty() {
@@ -677,7 +678,7 @@ impl Request {
 
             let msg_dst = SocketAddr::new(peer_address.ip, peer_address.port);
 
-            let has_perm = { a.has_permission(&msg_dst).await };
+            let has_perm = a.has_permission(&msg_dst).await;
             if !has_perm {
                 return Err(Error::ErrNoPermission);
             }

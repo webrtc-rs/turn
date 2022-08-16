@@ -9,9 +9,9 @@ use crate::{
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
-use futures::FutureExt;
 use request::*;
 
+use futures::FutureExt as _;
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
     sync::{
@@ -126,7 +126,7 @@ impl Server {
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => break,
                         Err(RecvError::Lagged(n)) => {
-                            log::error!("Turn server at has lagged by {n} messages");
+                            log::error!("Turn server has lagged by {n} messages");
                             continue
                         },
                     }
@@ -153,20 +153,13 @@ impl Server {
         let _ = conn.close().await;
     }
 
-    /// Deletes the [`crate::allocation::Allocation`] by provided [`Conn`]
-    /// address and `username`.
+    /// Deletes the [`crate::allocation::Allocation`] by the provided `username`.
     pub async fn delete_allocation(&self, username: String) -> Result<()> {
         let tx = self.handle.lock().await.clone();
         if let Some(tx) = tx {
             let (closed_tx, closed_rx) = mpsc::channel(1);
-            let res = tx
-                .send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
-                .map(|_| ())
-                .map_err(|_| Error::ErrClosed);
-
-            if res.is_err() {
-                return res;
-            }
+            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
+                .map_err(|_| Error::ErrClosed)?;
 
             closed_tx.closed().await;
 

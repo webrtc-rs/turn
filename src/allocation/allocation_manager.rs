@@ -92,10 +92,8 @@ impl Manager {
 
     // delete_allocation removes an allocation
     pub async fn delete_allocation(&self, five_tuple: &FiveTuple) {
-        let allocation = {
-            let mut allocations = self.allocations.lock().await;
-            allocations.remove(five_tuple)
-        };
+        let allocation = self.allocations.lock().await.remove(five_tuple);
+
         if let Some(a) = allocation {
             if let Err(err) = a.close().await {
                 log::error!("Failed to close allocation: {}", err);
@@ -105,21 +103,25 @@ impl Manager {
 
     /// Deletes the [`Allocation`] according to the specified `username`.
     pub async fn delete_allocations_by_username(&self, name: String) {
-        let mut allocations = self.allocations.lock().await;
+        let to_delete = {
+            let mut allocations = self.allocations.lock().await;
 
-        let mut tuples = Vec::new();
-        allocations.values().for_each(|v| {
-            if v.username.text == name {
-                tuples.push(v.five_tuple.clone());
-            }
-        });
+            let mut tuples = Vec::new();
+            allocations.values().for_each(|v| {
+                if v.username.text == name {
+                    tuples.push(v.five_tuple.clone());
+                }
+            });
 
-        let mut to_delete = Vec::with_capacity(tuples.len());
-        {
-            for t in tuples {
-                to_delete.push(allocations.remove(&t));
+            let mut to_delete = Vec::with_capacity(tuples.len());
+            {
+                for t in tuples {
+                    to_delete.push(allocations.remove(&t));
+                }
             }
-        }
+
+            to_delete
+        };
 
         future::join_all(to_delete.iter().map(|a| async move {
             if let Some(a) = a {
