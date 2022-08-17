@@ -120,7 +120,7 @@ impl Server {
                     match cmd {
                         Ok(Command::DeleteAllocations(name, _)) => {
                             allocation_manager
-                                .delete_allocations_by_username(name)
+                                .delete_allocations_by_username(name.as_str())
                                 .await;
                             continue;
                         }

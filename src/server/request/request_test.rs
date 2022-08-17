@@ -92,7 +92,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             Arc::clone(&r.conn),
             0,
             Duration::from_secs(3600),
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     assert!(r

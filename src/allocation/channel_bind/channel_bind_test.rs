@@ -16,7 +16,7 @@ async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0);

@@ -15,7 +15,7 @@ async fn test_has_permission() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr1 = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -52,7 +52,7 @@ async fn test_add_permission() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -75,7 +75,7 @@ async fn test_remove_permission() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -107,7 +107,7 @@ async fn test_add_channel_bind() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -140,7 +140,7 @@ async fn test_get_channel_by_number() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -175,7 +175,7 @@ async fn test_get_channel_by_addr() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -206,7 +206,7 @@ async fn test_remove_channel_bind() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -242,7 +242,7 @@ async fn test_allocation_refresh() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     a.start(DEFAULT_LIFETIME).await;
@@ -263,7 +263,7 @@ async fn test_allocation_close() -> Result<()> {
         relay_socket,
         relay_addr,
         FiveTuple::default(),
-        TextAttribute::new(ATTR_USERNAME, String::from("user")),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
     );
 
     // add mock lifetimeTimer

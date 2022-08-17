@@ -61,7 +61,7 @@ async fn test_packet_handler() -> Result<()> {
             Arc::new(turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
@@ -166,7 +166,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
@@ -176,7 +176,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await;
     assert!(result.is_err(), "expected error, but got ok");
@@ -201,7 +201,7 @@ async fn test_delete_allocation() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
@@ -242,7 +242,7 @@ async fn test_allocation_timeout() -> Result<()> {
                 Arc::clone(&turn_socket),
                 0,
                 lifetime,
-                TextAttribute::new(ATTR_USERNAME, String::from("user")),
+                TextAttribute::new(ATTR_USERNAME, "user".into()),
             )
             .await?;
 
@@ -291,7 +291,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(100),
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     allocations.push(a1);
@@ -302,7 +302,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(200),
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     allocations.push(a2);
@@ -339,7 +339,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     let _ = m
@@ -348,7 +348,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user")),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     let _ = m
@@ -363,7 +363,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 
     assert_eq!(m.allocations.lock().await.len(), 3);
 
-    m.delete_allocations_by_username(String::from("user")).await;
+    m.delete_allocations_by_username("user").await;
 
     assert_eq!(m.allocations.lock().await.len(), 1);
 
