@@ -108,6 +108,7 @@ impl Manager {
 
             let mut to_delete = Vec::new();
 
+            // TODO(logist322): Use `.drain_filter()` once stabilized.
             allocations.retain(|_, allocation| {
                 let match_name = allocation.username.text == name;
 
