@@ -24,18 +24,6 @@ use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
-/// The protocol to communicate between the [`Server`]'s public methods
-/// and the threads spawned in the [`read_loop`] method.
-#[derive(Clone)]
-enum Command {
-    /// Command to delete [`crate::allocation::Allocation`] by provided
-    /// `username`.
-    DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
-
-    /// Command to close the [`Server`].
-    Close(Arc<mpsc::Receiver<()>>),
-}
-
 /// Server is an instance of the TURN Server
 pub struct Server {
     auth_handler: Arc<dyn AuthHandler + Send + Sync>,
@@ -95,6 +83,22 @@ impl Server {
         Ok(s)
     }
 
+    /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
+    pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
+        let tx = self.handle.lock().await.clone();
+        if let Some(tx) = tx {
+            let (closed_tx, closed_rx) = mpsc::channel(1);
+            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
+                .map_err(|_| Error::ErrClosed)?;
+
+            closed_tx.closed().await;
+
+            Ok(())
+        } else {
+            Err(Error::ErrClosed)
+        }
+    }
+
     async fn read_loop(
         conn: Arc<dyn Conn + Send + Sync>,
         allocation_manager: Arc<Manager>,
@@ -105,6 +109,7 @@ impl Server {
         mut handle_rx: broadcast::Receiver<Command>,
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
+
         loop {
             let (n, addr) = futures::select! {
                 v = conn.recv_from(&mut buf).fuse() => {
@@ -153,22 +158,6 @@ impl Server {
         let _ = conn.close().await;
     }
 
-    /// Deletes the [`crate::allocation::Allocation`] by the provided `username`.
-    pub async fn delete_allocation(&self, username: String) -> Result<()> {
-        let tx = self.handle.lock().await.clone();
-        if let Some(tx) = tx {
-            let (closed_tx, closed_rx) = mpsc::channel(1);
-            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
-                .map_err(|_| Error::ErrClosed)?;
-
-            closed_tx.closed().await;
-
-            Ok(())
-        } else {
-            Err(Error::ErrClosed)
-        }
-    }
-
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
         let tx = self.handle.lock().await.take();
@@ -184,4 +173,16 @@ impl Server {
 
         Ok(())
     }
+}
+
+/// The protocol to communicate between the [`Server`]'s public methods
+/// and the threads spawned in the [`read_loop`] method.
+#[derive(Clone)]
+enum Command {
+    /// Command to delete [`crate::allocation::Allocation`] by provided
+    /// `username`.
+    DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+
+    /// Command to close the [`Server`].
+    Close(Arc<mpsc::Receiver<()>>),
 }
