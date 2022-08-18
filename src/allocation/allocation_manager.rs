@@ -101,16 +101,16 @@ impl Manager {
         }
     }
 
-    /// Deletes the [`Allocation`]s according to the specified `username`.
-    pub async fn delete_allocations_by_username(&self, name: &str) {
+    /// Deletes the [`Allocation`]s containing the specified `username`.
+    pub async fn delete_allocations_by_username(&self, username: &str) {
         let to_delete = {
             let mut allocations = self.allocations.lock().await;
 
             let mut to_delete = Vec::new();
 
-            // TODO(logist322): Use `.drain_filter()` once stabilized.
+            // TODO: Use `.drain_filter()` once stabilized.
             allocations.retain(|_, allocation| {
-                let match_name = allocation.username.text == name;
+                let match_name = allocation.username.text == username;
 
                 if match_name {
                     to_delete.push(Arc::clone(allocation));

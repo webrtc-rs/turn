@@ -181,11 +181,9 @@ impl Allocation {
 
     // Close closes the allocation
     pub async fn close(&self) -> Result<()> {
-        if self.closed.load(Ordering::Acquire) {
+        if self.closed.swap(true, Ordering::SeqCst) {
             return Err(Error::ErrClosed);
         }
-
-        self.closed.store(true, Ordering::Release);
         self.stop();
 
         {

@@ -83,20 +83,28 @@ impl Server {
         Ok(s)
     }
 
-    /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
-    pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
-        let tx = self.handle.lock().await.clone();
-        if let Some(tx) = tx {
-            let (closed_tx, closed_rx) = mpsc::channel(1);
-            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
-                .map_err(|_| Error::ErrClosed)?;
+    /// Deletes all existing [`Allocation`]s by the provided `username`.
+    ///
+    /// [`Allocation`]: crate::allocation::Allocation
+    pub async fn delete_allocations_by_username(&self, username: &str) -> Result<()> {
+        let tx = self
+            .handle
+            .lock()
+            .await
+            .as_ref()
+            .ok_or(Error::ErrClosed)?
+            .clone();
 
-            closed_tx.closed().await;
+        let (closed_tx, closed_rx) = mpsc::channel(1);
+        tx.send(Command::DeleteAllocations(
+            username.into(),
+            Arc::new(closed_rx),
+        ))
+        .map_err(|_| Error::ErrClosed)?;
 
-            Ok(())
-        } else {
-            Err(Error::ErrClosed)
-        }
+        closed_tx.closed().await;
+
+        Ok(())
     }
 
     async fn read_loop(
@@ -116,7 +124,7 @@ impl Server {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
-                            log::debug!("exit read loop on error: {err}");
+                            log::debug!("exit read loop on error: {}", err);
                             break;
                         }
                     }
@@ -125,13 +133,13 @@ impl Server {
                     match cmd {
                         Ok(Command::DeleteAllocations(name, _)) => {
                             allocation_manager
-                                .delete_allocations_by_username(name.as_str())
+                                .delete_allocations_by_username(&*name)
                                 .await;
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => break,
                         Err(RecvError::Lagged(n)) => {
-                            log::error!("Turn server has lagged by {n} messages");
+                            log::error!("Turn server has lagged by {} messages", n);
                             continue
                         },
                     }
@@ -175,13 +183,13 @@ impl Server {
     }
 }
 
-/// The protocol to communicate between the [`Server`]'s public methods
-/// and the threads spawned in the [`read_loop`] method.
+/// Protocol to communicate between the [`Server`]'s public methods and the
+/// threads spawned in the [`Server::read_loop()`] method.
 #[derive(Clone)]
 enum Command {
     /// Command to delete [`crate::allocation::Allocation`] by provided
-    /// `username`.
-    DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+    /// username.
+    DeleteAllocations(Box<str>, Arc<mpsc::Receiver<()>>),
 
     /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),

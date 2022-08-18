@@ -357,7 +357,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user2")),
+            TextAttribute::new(ATTR_USERNAME, "user2".into()),
         )
         .await?;
 
@@ -367,11 +367,9 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 
     assert_eq!(m.allocations.lock().await.len(), 1);
 
-    assert!(
-        m.get_allocation(&five_tuple1).await.is_none()
-            && m.get_allocation(&five_tuple2).await.is_none()
-            && m.get_allocation(&five_tuple3).await.is_some()
-    );
+    assert!(m.get_allocation(&five_tuple1).await.is_none());
+    assert!(m.get_allocation(&five_tuple2).await.is_none());
+    assert!(m.get_allocation(&five_tuple3).await.is_some());
 
     Ok(())
 }
